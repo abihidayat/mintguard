@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MintGuard — Check before you mint (for Agent ID holders)</title>
+<meta name="description" content="MintGuard checks BNB Chain mint contracts for Agent ID (.ai) holders: verified source, free-lane status, and a live zero-value mint simulation — before you spend anything.">
+<style>
+  :root { --bg:#0b0e13; --card:#131822; --line:#232c3d; --text:#e8edf5; --muted:#93a1b5; --accent:#f0b90b; --ok:#3fb96f; --warn:#e0a63f; --bad:#e05c5c; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 880px; margin: 0 auto; padding: 28px 18px 60px; }
+  h1 { font-size: 30px; margin: 6px 0 4px; }
+  h1 .g { color: var(--accent); }
+  .sub { color: var(--muted); margin: 0 0 22px; line-height: 1.5; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin: 16px 0; }
+  label { display:block; font-size: 13px; color: var(--muted); margin: 10px 0 5px; }
+  input { width: 100%; background:#0d1119; border:1px solid var(--line); color:var(--text); border-radius: 9px; padding: 11px 12px; font-size: 15px; font-family: ui-monospace, Menlo, monospace; }
+  .row { display:flex; gap:12px; flex-wrap: wrap; }
+  .row > div { flex: 1 1 240px; }
+  button { background: var(--accent); color:#111; border:0; border-radius: 9px; padding: 12px 22px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 16px; }
+  button:disabled { opacity: .55; cursor: wait; }
+  .badge { display:inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .ok { background: rgba(63,185,111,.15); color: var(--ok); }
+  .warn { background: rgba(224,166,63,.15); color: var(--warn); }
+  .bad { background: rgba(224,92,92,.15); color: var(--bad); }
+  table { width:100%; border-collapse: collapse; font-size: 14px; }
+  td, th { padding: 7px 6px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .mono { font-family: ui-monospace, Menlo, monospace; font-size: 13px; word-break: break-all; }
+  .verdict { font-size: 16px; line-height: 1.55; }
+  .muted { color: var(--muted); }
+  code { background:#0d1119; padding: 1px 6px; border-radius: 6px; font-size: 13px; }
+  pre { background:#0d1119; border:1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
+  a { color: var(--accent); }
+  .hidden { display:none; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 28px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Mint<span class="g">Guard</span></h1>
+  <p class="sub">Check before you mint. MintGuard inspects a BNB Chain mint contract for
+  <b>Agent ID (.ai)</b> holders <i>before</i> anyone spends a cent: is the source verified,
+  is the free lane really still open, and does a zero-value mint actually simulate from an
+  Agent ID wallet? Read-only — MintGuard never asks for approvals and never touches assets.</p>
+
+  <div class="card">
+    <label for="addr">Contract address to check (BNB Chain)</label>
+    <input id="addr" placeholder="0x…" autocomplete="off" spellcheck="false">
+    <div class="row">
+      <div>
+        <label for="wallet">Your Agent ID wallet (simulation sender)</label>
+        <input id="wallet" placeholder="0x… (optional)" autocomplete="off" spellcheck="false">
+      </div>
+      <div>
+        <label for="tokenid">Your Agent ID token ID (optional, for agent-id-arg mints)</label>
+        <input id="tokenid" placeholder="e.g. 12345" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <button id="run">Run the check</button>
+    <span id="busy" class="muted hidden"> checking on-chain…</span>
+  </div>
+
+  <div id="result" class="card hidden">
+    <h2 id="r-title" style="margin-top:0"></h2>
+    <p class="verdict" id="r-verdict"></p>
+    <table id="r-table"></table>
+    <p class="muted">Report hash (SHA-256 of this report — anchor it on-chain below):</p>
+    <p class="mono" id="r-hash"></p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Anchor your check on-chain</h2>
+    <p class="muted" style="line-height:1.6">Agent ID holders can anchor a report hash in the
+    <b>MintGuardLog</b> contract — a public, tamper-proof trail of what was checked and when.
+    The contract holds no assets, has no owner and no admin functions; the only gate is holding
+    an Agent ID, read live from the official registry.</p>
+    <p>MintGuardLog (BNB Chain): <span class="mono" id="logaddr">0x5897192ccde2f02636fd1eefd4d1951e84c93ec9</span></p>
+    <p class="muted">With a Binance Agentic Wallet agent (skill):</p>
+    <pre>baw contract-call preview --chain bsc --from &lt;your-address&gt; --to 0x5897192ccde2f02636fd1eefd4d1951e84c93ec9 --abi-function "anchorCheck(address,bytes32)" --args '&lt;target&gt;,&lt;reportHash&gt;'
+baw contract-call execute --request-id &lt;requestId-from-preview&gt;</pre>
+    <p class="muted">Daily check-in for Agent ID holders: call <code>checkIn()</code> on the same contract, once per day.</p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">How the check works</h2>
+    <table>
+      <tr><th>Contract is real</th><td>Live bytecode must exist at the address on BNB Chain.</td></tr>
+      <tr><th>Source verified</th><td>Sourcify match for chain 56 — exact match means the published source is the deployed code.</td></tr>
+      <tr><th>Supply &amp; free lane</th><td><code>totalSupply</code> / <code>maxSupply</code> / <code>freeMinted</code> read live, so "sold out" is a fact, not a rumour.</td></tr>
+      <tr><th>Zero-value simulation</th><td>The contract's own mint entry points (from its verified ABI) are simulated with value 0 from an Agent ID wallet. A clean simulation means the free mint is genuinely open for that wallet; the revert reason is shown when it is not.</td></tr>
+    </table>
+    <p class="muted">Agents: a machine-readable guide lives at <a href="skill.md">skill.md</a>.</p>
+  </div>
+
+  <footer>
+    MintGuard is a safety signal, not a guarantee and not financial advice. A clean check does not
+    promise a token will have value or a market. Always do your own research.<br>
+    Agent ID registry (SPACE ID): <span class="mono">0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F</span> ·
+    Built for the Agent ID Hackathon (Binance Wallet × BNB Chain).
+  </footer>
+</main>
+<script>/**
+ * [js-sha3]{@link https://github.com/emn178/js-sha3}
+ *
+ * @version 0.16.0
+ * @author Chen, Yi-Cyuan [emn178@gmail.com]
+ * @copyright Chen, Yi-Cyuan 2015-2026
+ * @license MIT
+ */
+!function(){"use strict";function t(t,e,r){this.blocks=[],this.s=[],this.padding=e,this.outputBits=r,this.reset=!0,this.finalized=!1,this.block=0,this.start=0,this.blockCount=1600-(t<<1)>>5,this.byteCount=this.blockCount<<2,this.outputBlocks=r>>5,this.extraBytes=(31&r)>>3;for(var n=0;n<50;++n)this.s[n]=0}function e(e,r,n,i){t.call(this,e,r,n),this.xof=i}function r(t,r,n,i){e.call(this,t,r,n,i),this.inputActive=!1,this.inputBytesRemaining=0}function n(t,r,n,i,o){e.call(this,t,r,n,i),this.bits=t,this.blockSize=o,this.inner=null,this.innerBytes=0,this.blockNumber=0}var i="input is invalid type",o="finalize already called",a="tuple input is incomplete",u="object"==typeof window,s=u?window:{};s.JS_SHA3_NO_WINDOW&&(u=!1);var h=!u&&"object"==typeof self;!s.JS_SHA3_NO_NODE_JS&&!u&&"object"==typeof process&&process.versions&&process.versions.node&&"renderer"!=process.type?s=global:h&&(s=self);for(var f=!s.JS_SHA3_NO_COMMON_JS&&"object"==typeof module&&module.exports,c="function"==typeof define&&define.amd,p=!s.JS_SHA3_NO_ARRAY_BUFFER&&"undefined"!=typeof ArrayBuffer,l="0123456789abcdef".split(""),d=[31,7936,2031616,520093696],y=[4,1024,262144,67108864],b=[0,8,16,24],g=[1,0,32898,0,32906,2147483648,2147516416,2147483648,32907,0,2147483649,0,2147516545,2147483648,32777,2147483648,138,0,136,0,2147516425,0,2147483658,0,2147516555,0,139,2147483648,32905,2147483648,32771,2147483648,32770,2147483648,128,2147483648,32778,0,2147483658,2147483648,2147516545,2147483648,32896,2147483648,2147483649,0,2147516424,2147483648],v=[224,256,384,512],w=[128,256],B=["hex","buffer","arrayBuffer","array","digest"],A={128:168,256:136},k=s.JS_SHA3_NO_NODE_JS||!Array.isArray?function(t){return"[object Array]"===Object.prototype.toString.call(t)}:Array.isArray,_=p?s.JS_SHA3_NO_ARRAY_BUFFER_IS_VIEW||!ArrayBuffer.isView?function(t){return"object"==typeof t&&t.buffer&&t.buffer.constructor===ArrayBuffer}:ArrayBuffer.isView:null,m=function(t){var e=typeof t;if("string"===e)return[t,!0];if("object"!==e||null===t)throw new Error(i);if(p&&t.constructor===ArrayBuffer)return[new Uint8Array(t),!1];if(k(t))return[t,!1];if(!p||!_(t))throw new Error(i);return[new Uint8Array(t.buffer,t.byteOffset,t.byteLength),!1]},x=function(t){return 0===m(t)[0].length},C=function(t){for(var e=[],r=0;r<t.length;++r)e[r]=t[r];return e},S=function(e,r,n){return function(i){return new t(e,r,e).update(i)[n]()}},z=function(e,r,n){return function(i,o){return new t(e,r,o).update(i)[n]()}},M=function(t,e,r){return function(e,n,i,o){return U["cshake"+t].update(e,n,i,o)[r]()}},E=function(t,e,r,n){return function(e,i,o,a){return U[(r?"kmacxof":"kmac")+t].update(e,i,o,a)[n]()}},N=function(t,e,r,n){return function(e,i,o){return U[(r?"tuplehashxof":"tuplehash")+t].update(e,i,o)[n]()}},O=function(t,e,r,n){return function(e,i,o,a){return U[(r?"parallelhashxof":"parallelhash")+t].update(e,i,o,a)[n]()}},I=function(t,e,r,n){for(var i=0;i<B.length;++i){var o=B[i];t[o]=e(r,n,o)}return t},R=function(e,r){var n=S(e,r,"hex");return n.create=function(){return new t(e,r,e)},n.update=function(t){return n.create().update(t)},I(n,S,e,r)},J=function(t,r,n){var i=A[t],o=E(t,0,n,"hex");return o.create=function(o,a,u){return new e(t,r,a,n).bytepad(["KMAC",u],i).bytepad([o],i)},o.update=function(t,e,r,n){return o.create(t,r,n).update(e)},I(o,function(t,e,r){return E(t,0,n,r)},t,r)},j=function(t,e,n){var o=A[t],a=N(t,0,n,"hex");return a.create=function(i,a){return new r(t,e,i,n).bytepad(["TupleHash",a],o)},a.update=function(t,e,r){if(!k(t))throw new Error(i);for(var n=a.create(e,r),o=0;o<t.length;++o)n.update(t[o]);return n},I(a,function(t,e,r){return N(t,0,n,r)},t,e)},H=function(t,e,r){var i=A[t],o=O(t,0,r,"hex");return o.create=function(o,a,u){if("number"!=typeof o||!isFinite(o)||o<1||Math.floor(o)!==o||o>268435455)throw new Error("block size is invalid");var s=new n(t,e,a,r,o).bytepad(["ParallelHash",u],i);return s.encode(o,!1),s},o.update=function(t,e,r,n){return o.create(e,r,n).update(t)},I(o,function(t,e,n){return O(t,0,r,n)},t,e)},F=[{name:"keccak",padding:[1,256,65536,16777216],bits:v,createMethod:R},{name:"sha3",padding:[6,1536,393216,100663296],bits:v,createMethod:R},{name:"shake",padding:d,bits:w,createMethod:function(e,r){var n=z(e,r,"hex");return n.create=function(n){return new t(e,r,n)},n.update=function(t,e){return n.create(e).update(t)},I(n,z,e,r)}},{name:"cshake",padding:y,bits:w,createMethod:function(e,r){var n=A[e],i=M(e,0,"hex");return i.create=function(i,o,a){return x(o)&&x(a)?U["shake"+e].create(i):new t(e,r,i).bytepad([o,a],n)},i.update=function(t,e,r,n){return i.create(e,r,n).update(t)},I(i,M,e,r)}},{name:"kmac",padding:y,bits:w,createMethod:function(t,e){return J(t,e,!1)}},{name:"kmacxof",padding:y,bits:w,createMethod:function(t,e){return J(t,e,!0)}},{name:"tuplehash",padding:y,bits:w,createMethod:function(t,e){return j(t,e,!1)}},{name:"tuplehashxof",padding:y,bits:w,createMethod:function(t,e){return j(t,e,!0)}},{name:"parallelhash",padding:y,bits:w,createMethod:function(t,e){return H(t,e,!1)}},{name:"parallelhashxof",padding:y,bits:w,createMethod:function(t,e){return H(t,e,!0)}}],U={},L=[],D=0;D<F.length;++D)for(var V=F[D],W=V.bits,Y=0;Y<W.length;++Y){var K=V.name+"_"+W[Y];if(L.push(K),U[K]=V.createMethod(W[Y],V.padding),"sha3"!==V.name){var P=V.name+W[Y];L.push(P),U[P]=U[K]}}t.prototype.update=function(t){if(this.finalized)throw new Error(o);var e=m(t);t=e[0];for(var r,n,i,a=e[1],u=this.blocks,s=this.byteCount,h=t.length,f=this.blockCount,c=0,p=this.s;c<h;){if(this.reset)for(this.reset=!1,u[0]=this.block,r=1;r<f+1;++r)u[r]=0;if(a)for(r=this.start;c<h&&r<s;++c)(n=t.charCodeAt(c))<128?u[r>>2]|=n<<b[3&r++]:n<2048?(u[r>>2]|=(192|n>>6)<<b[3&r++],u[r>>2]|=(128|63&n)<<b[3&r++]):n<55296||n>=57344?(u[r>>2]|=(224|n>>12)<<b[3&r++],u[r>>2]|=(128|n>>6&63)<<b[3&r++],u[r>>2]|=(128|63&n)<<b[3&r++]):n<56320&&(i=t.charCodeAt(c+1))>=56320&&i<57344?(++c,n=65536+((1023&n)<<10|1023&i),u[r>>2]|=(240|n>>18)<<b[3&r++],u[r>>2]|=(128|n>>12&63)<<b[3&r++],u[r>>2]|=(128|n>>6&63)<<b[3&r++],u[r>>2]|=(128|63&n)<<b[3&r++]):(u[r>>2]|=239<<b[3&r++],u[r>>2]|=191<<b[3&r++],u[r>>2]|=189<<b[3&r++]);else for(r=this.start;c<h&&r<s;++c)u[r>>2]|=t[c]<<b[3&r++];if(this.lastByteIndex=r,r>=s){for(this.start=r-s,this.block=u[f],r=0;r<f;++r)p[r]^=u[r];T(p),this.reset=!0}else this.start=r}return this},t.prototype.encode=function(e,r){var n=255&e,i=1,o=[n];for(n=255&(e>>=8);n>0;)o.unshift(n),n=255&(e>>=8),++i;return r?o.push(i):o.unshift(i),t.prototype.update.call(this,o),o.length},t.prototype.encodeString=function(e){var r=m(e);e=r[0];var n=r[1],i=0,o=e.length;if(n)for(var a=0;a<e.length;++a){var u=e.charCodeAt(a);u<128?i+=1:u<2048?i+=2:u<55296||u>=57344?i+=3:u<56320&&(u=e.charCodeAt(a+1))>=56320&&u<57344?(++a,i+=4):i+=3}else i=o;return i+=this.encode(8*i),t.prototype.update.call(this,e),i},t.prototype.bytepad=function(e,r){for(var n=this.encode(r),i=0;i<e.length;++i)n+=this.encodeString(e[i]);var o=(r-n%r)%r,a=[];return a.length=o,t.prototype.update.call(this,a),this},t.prototype.finalize=function(){if(!this.finalized){this.finalized=!0;var t=this.blocks,e=this.lastByteIndex,r=this.blockCount,n=this.s;if(t[e>>2]|=this.padding[3&e],this.lastByteIndex>=this.byteCount)for(t[0]=t[r],e=1;e<r+1;++e)t[e]=0;for(t[r-1]|=2147483648,e=0;e<r;++e)n[e]^=t[e];T(n)}},t.prototype.toString=t.prototype.hex=function(){this.finalize();for(var t,e=this.blockCount,r=this.s,n=this.outputBlocks,i=this.extraBytes,o=0,a=0,u="";a<n;){for(o=0;o<e&&a<n;++o,++a)t=r[o],u+=l[t>>4&15]+l[15&t]+l[t>>12&15]+l[t>>8&15]+l[t>>20&15]+l[t>>16&15]+l[t>>28&15]+l[t>>24&15];a%e==0&&(r=C(r),T(r),o=0)}return i&&(t=r[o],u+=l[t>>4&15]+l[15&t],i>1&&(u+=l[t>>12&15]+l[t>>8&15]),i>2&&(u+=l[t>>20&15]+l[t>>16&15])),u},t.prototype.arrayBuffer=function(){this.finalize();var t,e=this.blockCount,r=this.s,n=this.outputBlocks,i=this.extraBytes,o=0,a=0,u=this.outputBits>>3;t=i?new ArrayBuffer(n+1<<2):new ArrayBuffer(u);for(var s=new Uint32Array(t);a<n;){for(o=0;o<e&&a<n;++o,++a)s[a]=r[o];a%e==0&&(r=C(r),T(r))}return i&&(s[a]=r[o],t=t.slice(0,u)),t},t.prototype.buffer=t.prototype.arrayBuffer,t.prototype.digest=t.prototype.array=function(){this.finalize();for(var t,e,r=this.blockCount,n=this.s,i=this.outputBlocks,o=this.extraBytes,a=0,u=0,s=[];u<i;){for(a=0;a<r&&u<i;++a,++u)t=u<<2,e=n[a],s[t]=255&e,s[t+1]=e>>8&255,s[t+2]=e>>16&255,s[t+3]=e>>24&255;u%r==0&&(n=C(n),T(n))}return o&&(t=u<<2,e=n[a],s[t]=255&e,o>1&&(s[t+1]=e>>8&255),o>2&&(s[t+2]=e>>16&255)),s},(e.prototype=new t).finalize=function(){return this.finalized||this.encode(this.xof?0:this.outputBits,!0),t.prototype.finalize.call(this)},(r.prototype=new e).getMessageByteLength=function(t){var e=m(t);if(t=e[0],!e[1])return t.length;for(var r=0,n=0;n<t.length;++n){var i=t.charCodeAt(n);i<128?r+=1:i<2048?r+=2:i<55296||i>=57344?r+=3:i<56320&&(i=t.charCodeAt(n+1))>=56320&&i<57344?(++n,r+=4):r+=3}return r},r.prototype.beginInput=function(t){if(this.inputActive)throw new Error(a);if("number"!=typeof t||!isFinite(t)||t<0||Math.floor(t)!==t||t>268435455)throw new Error("tuple input byte length is invalid");return this.encode(8*t,!1),0!==t&&(this.inputActive=!0,this.inputBytesRemaining=t),this},r.prototype._updateChunk=function(t,r){return e.prototype.update.call(this,t),this.inputBytesRemaining-=r,0===this.inputBytesRemaining&&(this.inputActive=!1),this},r.prototype.updateChunk=function(t){if(!this.inputActive)throw new Error("no active tuple input");var e=this.getMessageByteLength(t);if(e>this.inputBytesRemaining)throw new Error("tuple input exceeds declared length");return this._updateChunk(t,e)},r.prototype.update=function(t){var e=this.getMessageByteLength(t);return this.beginInput(e),this._updateChunk(t,e)},r.prototype.finalize=function(){if(this.inputActive)throw new Error(a);return e.prototype.finalize.call(this)},(n.prototype=new e)._finishInner=function(){e.prototype.update.call(this,this.inner.array()),this.inner=null,this.innerBytes=0,++this.blockNumber},n.prototype._updateBytes=function(e){var r=e.length;if(r)for(var n=e.subarray||e.slice,i=this.blockSize,o=0;o<r;){this.inner||(this.inner=new t(this.bits,d,this.bits<<1));var a=i-this.innerBytes;r-o<a&&(a=r-o),this.inner.update(n.call(e,o,o+a)),this.innerBytes+=a,o+=a,this.innerBytes===i&&this._finishInner()}},n.prototype.update=function(t){if(this.finalized)throw new Error(o);var e=m(t);if(t=e[0],e[1]){var r,n,i,a=[],u=t.length,s=0;for(i=0;i<u;++i)(r=t.charCodeAt(i))<128?a[s++]=r:r<2048?(a[s++]=192|r>>>6,a[s++]=128|63&r):r<55296||r>=57344?(a[s++]=224|r>>>12,a[s++]=128|r>>>6&63,a[s++]=128|63&r):r<56320&&(n=t.charCodeAt(i+1))>=56320&&n<57344?(++i,r=65536+((1023&r)<<10|1023&n),a[s++]=240|r>>>18,a[s++]=128|r>>>12&63,a[s++]=128|r>>>6&63,a[s++]=128|63&r):(a[s++]=239,a[s++]=191,a[s++]=189);t=a}return this._updateBytes(t),this},n.prototype.finalize=function(){return this.finalized||(this.inner&&this._finishInner(),this.encode(this.blockNumber,!0)),e.prototype.finalize.call(this)};var T=function(t){var e,r,n,i,o,a,u,s,h,f,c,p,l,d,y,b,v,w,B,A,k,_,m,x,C,S,z,M,E,N,O,I,R,J,j,H,F,U,L,D,V,W,Y,K,P,T,q,G,Q,X,Z,$,tt,et,rt,nt,it,ot,at,ut,st,ht,ft;for(n=0;n<48;n+=2)i=t[0]^t[10]^t[20]^t[30]^t[40],o=t[1]^t[11]^t[21]^t[31]^t[41],a=t[2]^t[12]^t[22]^t[32]^t[42],u=t[3]^t[13]^t[23]^t[33]^t[43],s=t[4]^t[14]^t[24]^t[34]^t[44],h=t[5]^t[15]^t[25]^t[35]^t[45],f=t[6]^t[16]^t[26]^t[36]^t[46],c=t[7]^t[17]^t[27]^t[37]^t[47],e=(p=t[8]^t[18]^t[28]^t[38]^t[48])^(a<<1|u>>>31),r=(l=t[9]^t[19]^t[29]^t[39]^t[49])^(u<<1|a>>>31),t[0]^=e,t[1]^=r,t[10]^=e,t[11]^=r,t[20]^=e,t[21]^=r,t[30]^=e,t[31]^=r,t[40]^=e,t[41]^=r,e=i^(s<<1|h>>>31),r=o^(h<<1|s>>>31),t[2]^=e,t[3]^=r,t[12]^=e,t[13]^=r,t[22]^=e,t[23]^=r,t[32]^=e,t[33]^=r,t[42]^=e,t[43]^=r,e=a^(f<<1|c>>>31),r=u^(c<<1|f>>>31),t[4]^=e,t[5]^=r,t[14]^=e,t[15]^=r,t[24]^=e,t[25]^=r,t[34]^=e,t[35]^=r,t[44]^=e,t[45]^=r,e=s^(p<<1|l>>>31),r=h^(l<<1|p>>>31),t[6]^=e,t[7]^=r,t[16]^=e,t[17]^=r,t[26]^=e,t[27]^=r,t[36]^=e,t[37]^=r,t[46]^=e,t[47]^=r,e=f^(i<<1|o>>>31),r=c^(o<<1|i>>>31),t[8]^=e,t[9]^=r,t[18]^=e,t[19]^=r,t[28]^=e,t[29]^=r,t[38]^=e,t[39]^=r,t[48]^=e,t[49]^=r,d=t[0],y=t[1],T=t[11]<<4|t[10]>>>28,q=t[10]<<4|t[11]>>>28,M=t[20]<<3|t[21]>>>29,E=t[21]<<3|t[20]>>>29,ut=t[31]<<9|t[30]>>>23,st=t[30]<<9|t[31]>>>23,W=t[40]<<18|t[41]>>>14,Y=t[41]<<18|t[40]>>>14,J=t[2]<<1|t[3]>>>31,j=t[3]<<1|t[2]>>>31,b=t[13]<<12|t[12]>>>20,v=t[12]<<12|t[13]>>>20,G=t[22]<<10|t[23]>>>22,Q=t[23]<<10|t[22]>>>22,N=t[33]<<13|t[32]>>>19,O=t[32]<<13|t[33]>>>19,ht=t[42]<<2|t[43]>>>30,ft=t[43]<<2|t[42]>>>30,et=t[5]<<30|t[4]>>>2,rt=t[4]<<30|t[5]>>>2,H=t[14]<<6|t[15]>>>26,F=t[15]<<6|t[14]>>>26,w=t[25]<<11|t[24]>>>21,B=t[24]<<11|t[25]>>>21,X=t[34]<<15|t[35]>>>17,Z=t[35]<<15|t[34]>>>17,I=t[45]<<29|t[44]>>>3,R=t[44]<<29|t[45]>>>3,x=t[6]<<28|t[7]>>>4,C=t[7]<<28|t[6]>>>4,nt=t[17]<<23|t[16]>>>9,it=t[16]<<23|t[17]>>>9,U=t[26]<<25|t[27]>>>7,L=t[27]<<25|t[26]>>>7,A=t[36]<<21|t[37]>>>11,k=t[37]<<21|t[36]>>>11,$=t[47]<<24|t[46]>>>8,tt=t[46]<<24|t[47]>>>8,K=t[8]<<27|t[9]>>>5,P=t[9]<<27|t[8]>>>5,S=t[18]<<20|t[19]>>>12,z=t[19]<<20|t[18]>>>12,ot=t[29]<<7|t[28]>>>25,at=t[28]<<7|t[29]>>>25,D=t[38]<<8|t[39]>>>24,V=t[39]<<8|t[38]>>>24,_=t[48]<<14|t[49]>>>18,m=t[49]<<14|t[48]>>>18,t[0]=d^~b&w,t[1]=y^~v&B,t[10]=x^~S&M,t[11]=C^~z&E,t[20]=J^~H&U,t[21]=j^~F&L,t[30]=K^~T&G,t[31]=P^~q&Q,t[40]=et^~nt&ot,t[41]=rt^~it&at,t[2]=b^~w&A,t[3]=v^~B&k,t[12]=S^~M&N,t[13]=z^~E&O,t[22]=H^~U&D,t[23]=F^~L&V,t[32]=T^~G&X,t[33]=q^~Q&Z,t[42]=nt^~ot&ut,t[43]=it^~at&st,t[4]=w^~A&_,t[5]=B^~k&m,t[14]=M^~N&I,t[15]=E^~O&R,t[24]=U^~D&W,t[25]=L^~V&Y,t[34]=G^~X&$,t[35]=Q^~Z&tt,t[44]=ot^~ut&ht,t[45]=at^~st&ft,t[6]=A^~_&d,t[7]=k^~m&y,t[16]=N^~I&x,t[17]=O^~R&C,t[26]=D^~W&J,t[27]=V^~Y&j,t[36]=X^~$&K,t[37]=Z^~tt&P,t[46]=ut^~ht&et,t[47]=st^~ft&rt,t[8]=_^~d&b,t[9]=m^~y&v,t[18]=I^~x&S,t[19]=R^~C&z,t[28]=W^~J&H,t[29]=Y^~j&F,t[38]=$^~K&T,t[39]=tt^~P&q,t[48]=ht^~et&nt,t[49]=ft^~rt&it,t[0]^=g[n],t[1]^=g[n+1]};if(f)module.exports=U;else{for(D=0;D<L.length;++D)s[L[D]]=U[L[D]];c&&define(function(){return U})}}();</script>
+<script>
+const RPCS = ['https://bsc-dataseed.binance.org','https://bsc-dataseed1.binance.org','https://bsc.publicnode.com'];
+const REGISTRY = '0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F';
+const sel = (sig) => '0x' + keccak256(sig).slice(0, 8);
+const S = Object.fromEntries(['totalSupply()','freeMinted()','balanceOf(address)','name()','symbol()','owner()','totalMinted()','maxSupply()','MAX_SUPPLY()'].map(s => [s, sel(s)]));
+
+async function rpc(method, params) {
+  let last;
+  for (const url of RPCS) {
+    try {
+      const r = await fetch(url, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({jsonrpc:'2.0', id:1, method, params}) });
+      const j = await r.json();
+      if (j.error) throw new Error(j.error.message || 'rpc error');
+      return j.result;
+    } catch (e) { last = e; }
+  }
+  throw last;
+}
+const padAddr = (a) => a.toLowerCase().replace('0x','').padStart(64,'0');
+const call = (to, data, from) => rpc('eth_call', [{ to, data, ...(from ? { from } : {}) }, 'latest']).catch(e => ({ __error: e.message }));
+const asInt = (v) => (typeof v === 'string' && v.startsWith('0x') && v !== '0x') ? BigInt(v) : null;
+function asString(v) {
+  if (typeof v !== 'string' || !v.startsWith('0x')) return null;
+  try { const hex = v.slice(2); const len = parseInt(hex.slice(64,128),16);
+    return new TextDecoder().decode(Uint8Array.from(hex.slice(128,128+len*2).match(/../g).map(h => parseInt(h,16))));
+  } catch { return null; }
+}
+async function sourcify(address) {
+  try {
+    const r = await fetch('https://sourcify.dev/server/v2/contract/56/' + address + '?fields=abi', { headers:{ accept:'application/json' } });
+    if (!r.ok) return { status:'unknown', abi: [] };
+    const j = await r.json();
+    return { status: j.match || 'none', verified: j.match === 'exact_match' || j.match === 'match', abi: j.abi || [] };
+  } catch { return { status:'unknown', abi: [] }; }
+}
+const encUint = (n) => BigInt(n).toString(16).padStart(64,'0');
+function encArgs(types, values) {
+  let head = '', tail = ''; const headBytes = types.length * 32;
+  types.forEach((t, i) => { const v = values[i];
+    if (t === 'string') { const bytes = new TextEncoder().encode(String(v)); head += encUint(headBytes + tail.length/2);
+      tail += encUint(bytes.length) + Array.from(bytes).map(b => b.toString(16).padStart(2,'0')).join('').padEnd(Math.ceil(bytes.length/32)*64, '0');
+    } else if (t.startsWith('uint') || t.startsWith('int')) head += encUint(v);
+    else if (t === 'address') head += padAddr(v);
+    else if (t === 'bool') head += (v ? '1' : '0').padStart(64,'0');
+    else if (t === 'bytes32') head += String(v).replace('0x','').padStart(64,'0');
+    else throw new Error('unsupported ' + t);
+  });
+  return head + tail;
+}
+function argSets(types, wallet, tokenId) {
+  const key = types.join(','), out = [];
+  if (types.length === 0) out.push([]);
+  else if (key === 'uint256' || key === 'uint8') { out.push([1]); if (tokenId) out.push([tokenId]); }
+  else if (key === 'uint256,uint256') { out.push([1,1]); out.push([0,1]); out.push([1,0]); if (tokenId) out.push([tokenId,1]); }
+  else if (key === 'address') out.push([wallet]);
+  else if (key === 'address,uint256') out.push([wallet,1]);
+  else if (key === 'uint256,address') out.push([1,wallet]);
+  return out;
+}
+async function sha256hex(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return '0x' + Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function runCheck() {
+  const addr = document.getElementById('addr').value.trim();
+  const wallet = document.getElementById('wallet').value.trim() || '0x0000000000000000000000000000000000000001';
+  const tokenId = document.getElementById('tokenid').value.trim();
+  const btn = document.getElementById('run'), busy = document.getElementById('busy');
+  if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) { alert('That does not look like a contract address.'); return; }
+  btn.disabled = true; busy.classList.remove('hidden');
+  const c = {};
+  try {
+    const code = await rpc('eth_getCode', [addr, 'latest']).catch(() => '0x');
+    c.hasCode = code && code !== '0x';
+    if (!c.hasCode) { render(addr, c, 'NO CONTRACT — no code at this address on BNB Chain.', []); return; }
+    c.name = asString(await call(addr, S['name()'])) || undefined;
+    c.symbol = asString(await call(addr, S['symbol()'])) || undefined;
+    const src = await sourcify(addr);
+    c.sourceVerified = src.verified === true; c.sourcifyMatch = src.status;
+    const bal = asInt(await call(REGISTRY, S['balanceOf(address)'] + padAddr(wallet)));
+    c.walletHoldsAgentId = bal !== null && bal > 0n;
+    const ts = asInt(await call(addr, S['totalSupply()'])); if (ts !== null) c.totalSupply = ts.toString();
+    const tm = asInt(await call(addr, S['totalMinted()'])); if (tm !== null) c.totalMinted = tm.toString();
+    const ms = asInt(await call(addr, S['maxSupply()'])) ?? asInt(await call(addr, S['MAX_SUPPLY()'])); if (ms !== null) c.maxSupply = ms.toString();
+    const fm = asInt(await call(addr, S['freeMinted()'])); if (fm !== null) c.freeMinted = fm.toString();
+    const probes = [];
+    const mintFns = (src.abi || []).filter(e => e.type === 'function' && /mint|claim/i.test(e.name) && e.stateMutability !== 'view' && e.stateMutability !== 'pure');
+    if (mintFns.length) {
+      for (const fn of mintFns) {
+        const types = (fn.inputs || []).map(i => i.type);
+        const sets = argSets(types, wallet, tokenId || null);
+        if (!sets.length) { probes.push({ fn: fn.name + '(' + types.join(',') + ')', simulates: false, reason: 'argument shape not probeable automatically' }); continue; }
+        for (const values of sets) {
+          let data; try { data = sel(fn.name + '(' + types.join(',') + ')') + encArgs(types, values); } catch { continue; }
+          const res = await call(addr, data, wallet);
+          const ok = typeof res === 'string';
+          probes.push({ fn: fn.name + '(' + types.join(',') + ') [' + values.join(', ') + ']', simulates: ok, ...(ok ? {} : { reason: String(res.__error || '').slice(0, 90) }) });
+          if (ok) break;
+        }
+      }
+    } else {
+      for (const [label, data] of [['mint()', sel('mint()')], ['mint(uint256) x1', sel('mint(uint256)') + encUint(1)], ['freeMint()', sel('freeMint()')], ['freeMint(uint256) x1', sel('freeMint(uint256)') + encUint(1)]]) {
+        const res = await call(addr, data, wallet);
+        probes.push({ fn: label, simulates: typeof res === 'string', ...(typeof res === 'string' ? {} : { reason: String(res.__error || '').slice(0, 90) }) });
+      }
+    }
+    c.mintProbes = probes;
+    c.freeMintSimulates = probes.some(p => p.simulates);
+    const win = probes.find(p => p.simulates); if (win) c.freeEntryPoint = win.fn;
+    const notes = [];
+    notes.push(c.sourceVerified ? 'Source verified (Sourcify).' : 'Source NOT verified on Sourcify — higher risk.');
+    if (c.totalSupply !== undefined && c.maxSupply !== undefined && c.totalSupply === c.maxSupply) notes.push('Supply exhausted — sold out.');
+    if (c.freeMinted !== undefined) notes.push('Free minted so far: ' + c.freeMinted + '.');
+    notes.push(c.freeMintSimulates ? ('FREE mint simulates cleanly via ' + c.freeEntryPoint + '.') : 'No zero-value mint simulates from this wallet (free lane closed, paid, signature-gated, or already claimed).');
+    render(addr, c, notes.join(' '), probes);
+  } catch (e) {
+    render(addr, c, 'The check could not complete: ' + e.message, []);
+  } finally {
+    btn.disabled = false; busy.classList.add('hidden');
+  }
+}
+async function render(addr, c, verdict, probes) {
+  const box = document.getElementById('result'); box.classList.remove('hidden');
+  document.getElementById('r-title').textContent = (c.name ? c.name + (c.symbol ? ' (' + c.symbol + ')' : '') : addr);
+  document.getElementById('r-verdict').textContent = verdict;
+  const rows = [];
+  const badge = (ok, y, n) => '<span class="badge ' + (ok ? 'ok' : 'bad') + '">' + (ok ? y : n) + '</span>';
+  if (c.hasCode !== undefined) rows.push(['Contract code', badge(c.hasCode, 'present', 'missing')]);
+  if (c.sourceVerified !== undefined) rows.push(['Source verified', badge(c.sourceVerified, 'verified · ' + c.sourcifyMatch, 'not verified')]);
+  if (c.totalSupply !== undefined) rows.push(['Minted / supply', c.totalSupply + (c.maxSupply ? ' / ' + c.maxSupply : '')]);
+  if (c.freeMinted !== undefined) rows.push(['Free minted', c.freeMinted]);
+  if (c.walletHoldsAgentId !== undefined) rows.push(['Simulation wallet holds Agent ID', badge(c.walletHoldsAgentId, 'yes', 'no')]);
+  if (c.freeMintSimulates !== undefined) rows.push(['Free mint simulates (value 0)', badge(c.freeMintSimulates, 'yes', 'no')]);
+  for (const p of probes) rows.push(['Probe · ' + p.fn, p.simulates ? '<span class="badge ok">simulates</span>' : '<span class="badge warn">reverts</span> <span class="muted">' + (p.reason || '') + '</span>']);
+  document.getElementById('r-table').innerHTML = rows.map(r => '<tr><th>' + r[0] + '</th><td>' + r[1] + '</td></tr>').join('');
+  document.getElementById('r-hash').textContent = await sha256hex(JSON.stringify(c));
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+document.getElementById('run').addEventListener('click', runCheck);
+</script>
+</body>
+</html>
